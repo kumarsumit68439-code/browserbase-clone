@@ -5,19 +5,17 @@ export default function HomePage() {
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <header className="header">
         <div className="header-inner">
-          <strong>BrowserBase</strong>
-          <Link href="/login" className="btn btn-white" style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}>
+          <strong style={{ fontSize: "1rem" }}>BrowserBase</strong>
+          <Link href="/login" className="btn btn-white" style={{ padding: "0.45rem 0.9rem", minHeight: 40, fontSize: "0.85rem" }}>
             Sign in
           </Link>
         </div>
       </header>
-      <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
-        <div style={{ maxWidth: 640, textAlign: "center" }}>
-          <h1 style={{ fontSize: "2.5rem", fontWeight: 700, marginBottom: "1rem" }}>
-            Give your agents access to the whole web
-          </h1>
-          <p className="muted" style={{ marginBottom: "2rem" }}>
-            Cloud headless browsers, sessions, API keys.
+      <main className="hero" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ maxWidth: 560 }}>
+          <h1>Give your agents access to the whole web</h1>
+          <p>
+            Cloud headless browsers, sessions, and API keys — built for mobile and desktop.
           </p>
           <Link href="/login" className="btn btn-primary">
             Get started free
