@@ -5,8 +5,18 @@ import { generateSessionId } from '@/lib/keys'
 import { createRealBrowserSession } from '@/lib/browser-provider'
 import { createHash } from 'crypto'
 
+function extractApiKey(req: NextRequest): string | null {
+  const headerKey = req.headers.get('x-bb-api-key')
+  if (headerKey) return headerKey.trim()
+  const auth = req.headers.get('authorization')
+  if (auth?.toLowerCase().startsWith('bearer ')) {
+    return auth.slice(7).trim()
+  }
+  return null
+}
+
 async function authByApiKey(req: NextRequest) {
-  const apiKey = req.headers.get('x-bb-api-key')
+  const apiKey = extractApiKey(req)
   if (!apiKey) return null
   const hash = createHash('sha256').update(apiKey).digest('hex')
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -31,7 +41,11 @@ export async function GET(req: NextRequest) {
     if (!keyAuth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     userId = keyAuth.user_id
   }
-  let query = supabase
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const db = serviceKey
+    ? createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey)
+    : supabase
+  let query = db
     .from('bb_sessions')
     .select('*')
     .eq('user_id', userId!)
@@ -54,7 +68,7 @@ export async function POST(req: NextRequest) {
     const keyAuth = await authByApiKey(req)
     if (!keyAuth) {
       return NextResponse.json(
-        { error: 'Unauthorized. Provide x-bb-api-key header or login.' },
+        { error: 'Unauthorized. Provide Authorization: Bearer <api_key> or x-bb-api-key.' },
         { status: 401 }
       )
     }
@@ -62,8 +76,18 @@ export async function POST(req: NextRequest) {
     projectId = keyAuth.project_id
   }
 
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const db = serviceKey
+    ? createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey)
+    : supabase
+
   if (!projectId) {
-    const { data: project } = await supabase
+    const headerProject = req.headers.get('x-bb-project-id')
+    if (headerProject) projectId = headerProject
+  }
+
+  if (!projectId) {
+    const { data: project } = await db
       .from('bb_projects')
       .select('id')
       .eq('user_id', userId!)
@@ -102,7 +126,7 @@ export async function POST(req: NextRequest) {
       {
         error: 'Failed to create real browser session',
         message: err?.message || String(err),
-        hint: 'Set BROWSERLESS_TOKEN in Vercel Environment Variables. Get free token: https://www.browserless.io',
+        hint: 'Set BROWSERLESS_TOKEN in Vercel Environment Variables.',
       },
       { status: 503 }
     )
@@ -124,7 +148,7 @@ export async function POST(req: NextRequest) {
     user_metadata: { ...providerMeta, ...(body.userMetadata || {}) },
   }
 
-  const { data, error } = await supabase.from('bb_sessions').insert(row).select().single()
+  const { data, error } = await db.from('bb_sessions').insert(row).select().single()
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
