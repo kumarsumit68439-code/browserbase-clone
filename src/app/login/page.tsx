@@ -1,10 +1,10 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-export default function LoginPage() {
+function LoginForm() {
   const [loading, setLoading] = useState(false)
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
@@ -84,5 +84,17 @@ export default function LoginPage() {
         <p className="text-center text-zinc-600 text-xs mt-8">Powered by Supabase Auth • Vercel</p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-zinc-400">Loading...</div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
