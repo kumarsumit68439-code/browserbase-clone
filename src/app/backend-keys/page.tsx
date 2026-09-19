@@ -21,7 +21,9 @@ export default function BackendKeysPage() {
   const [testOut, setTestOut] = useState("");
 
   const base =
-    typeof window !== "undefined" ? window.location.origin : "https://browserbase-clone-open-source1.vercel.app";
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://browserbase-clone-open-source1.vercel.app";
 
   const load = async () => {
     setLoading(true);
@@ -63,7 +65,10 @@ export default function BackendKeysPage() {
   };
 
   const testInsert = async () => {
-    const key = newKey || keys.find((k) => k.full_key?.startsWith("bb_backend_"))?.full_key || keys[0]?.full_key;
+    const key =
+      newKey ||
+      keys.find((k) => k.full_key?.startsWith("bb_backend_"))?.full_key ||
+      keys[0]?.full_key;
     if (!key) {
       setError("Generate a backend key first");
       return;
@@ -82,16 +87,13 @@ export default function BackendKeysPage() {
           data: { hello: "from backend API", at: new Date().toISOString() },
         }),
       });
-      dual = await res.json();
-      setTestOut(JSON.stringify(dual, null, 2));
-      if (!res.ok) setError(dual.error || "Test failed");
+      const data = await res.json();
+      setTestOut(JSON.stringify(data, null, 2));
+      if (!res.ok) setError(data.error || "Test failed");
     } catch (e: any) {
       setError(e.message);
     }
   };
-
-  // fix typo dual
-  let dual: any;
 
   const sample = newKey || "bb_backend_YOUR_KEY";
 
@@ -148,7 +150,9 @@ export default function BackendKeysPage() {
       </div>
 
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>Endpoints (any website / localhost)</h2>
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>
+          Endpoints (any website / localhost)
+        </h2>
         <pre className="mono" style={codeBox}>{`# Backend data (Supabase)
 curl -X POST ${base}/api/v1/backend/data \\
   -H "Authorization: Bearer ${sample}" \\
@@ -178,7 +182,7 @@ curl -X POST ${base}/api/v1/langgraph/run \\
   updated_at timestamptz default now()
 );`}</pre>
         <p className="muted" style={{ fontSize: "0.8rem", marginTop: 8 }}>
-          Firebase optional: set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY for dual backend.
+          Firebase optional: set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.
         </p>
       </div>
     </AppShell>

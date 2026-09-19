@@ -9,8 +9,8 @@ export default async function McpDocsPage() {
 
   return (
     <AppShell email={user.email} active="/docs/mcp">
-      <h1 className="page-title">MCP Connect · PKCE OAuth</h1>
-      <p className="page-sub">Real authorization code + PKCE (S256) · MCP tools after Bearer token</p>
+      <h1 className="page-title">MCP Connect · Fixed OAuth</h1>
+      <p className="page-sub">Working client_id + client_secret · PKCE supported · Approve flow</p>
 
       <div className="card" style={{ marginBottom: "1rem" }}>
         <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>MCP Server URL</h2>
@@ -20,50 +20,40 @@ export default async function McpDocsPage() {
       </div>
 
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>Custom Connector (PKCE)</h2>
-        <pre className="mono code-block" style={box}>{`Client ID:                 chatgpt   (or claude / cursor / grok …)
-Client Secret:             (leave empty)
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>
+          Custom Connector credentials (copy-paste)
+        </h2>
+        <pre className="mono code-block" style={box}>{`Client ID:                 bb_mcp_chatgpt
+Client Secret:             bb_mcp_connect_secret_live_2026
 Authorization Endpoint:    ${base}/oauth/authorize
 Token Endpoint:            ${base}/oauth/token
 Scopes:                    mcp
-Token Auth Method:         none (PKCE only)
+Token Auth Method:         client_secret_post   (or none / PKCE)
 
-Discovery:
-${base}/.well-known/oauth-authorization-server
-${base}/.well-known/oauth-protected-resource`}</pre>
+Aliases (same secret):
+  bb_mcp_claude · bb_mcp_cursor · bb_mcp_gemini · bb_mcp_grok
+  bb_mcp_codex · bb_mcp_lovable · bb_mcp_base44
+  chatgpt · claude · cursor · openai`}</pre>
       </div>
 
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>PKCE flow</h2>
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>Steps</h2>
         <ol className="muted" style={{ paddingLeft: "1.2rem", fontSize: "0.9rem" }}>
-          <li>Client creates code_verifier + code_challenge = S256(verifier)</li>
-          <li>
-            GET /oauth/authorize?response_type=code&amp;client_id=…&amp;redirect_uri=…&amp;code_challenge=…&amp;code_challenge_method=S256&amp;scope=mcp&amp;state=…
-          </li>
-          <li>You login (Google) → Approve screen</li>
-          <li>Redirect: redirect_uri?code=…&amp;state=…</li>
-          <li>
-            POST /oauth/token with grant_type=authorization_code, code, redirect_uri, code_verifier, client_id
-          </li>
-          <li>Use access_token: Authorization: Bearer … on {base}/api/mcp</li>
+          <li>Paste credentials above into Custom Connector</li>
+          <li>Connect → browser opens Authorize → Google login if needed</li>
+          <li>Click <strong>Approve</strong></li>
+          <li>Connector receives code → exchanges token → MCP tools work</li>
         </ol>
-      </div>
-
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>Important</h2>
-        <p className="muted" style={{ fontSize: "0.9rem" }}>
-          Vercel → Project → Settings → <strong>Deployment Protection</strong> must be{" "}
-          <strong>Disabled</strong> for production, or OAuth/MCP will redirect to Vercel login (405 / blocked).
+        <p className="muted" style={{ fontSize: "0.85rem", marginTop: 8 }}>
+          Vercel Deployment Protection must be <strong>OFF</strong> or OAuth redirects fail.
         </p>
       </div>
 
       <div className="card">
-        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>MCP tools after OAuth</h2>
-        <ul className="muted" style={{ paddingLeft: "1.2rem", fontSize: "0.9rem" }}>
-          <li>get_workspace, get_api_keys</li>
-          <li>list_sessions, get_session, create_session</li>
-          <li>get_docs, list_pages</li>
-        </ul>
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 8 }}>List fixed clients API</h2>
+        <code className="mono" style={box}>
+          GET {base}/oauth/register
+        </code>
       </div>
     </AppShell>
   );

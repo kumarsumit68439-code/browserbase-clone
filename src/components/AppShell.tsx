@@ -10,6 +10,7 @@ const nav = [
       { href: "/dashboard", label: "Home" },
       { href: "/api-keys", label: "API Keys" },
       { href: "/ai-keys", label: "AI API Keys" },
+      { href: "/backend-keys", label: "Backend Keys" },
       { href: "/users", label: "Users" },
       { href: "/email-alerts", label: "Email Alerts" },
     ],
@@ -117,7 +118,7 @@ export function AppShell({
           <header className="header desktop-only">
             <div className="header-inner" style={{ maxWidth: "none" }}>
               <span className="muted header-tagline" style={{ fontSize: "0.875rem" }}>
-                AI Playground · keys · MCP
+                Backend · AI · MCP OAuth
               </span>
               <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                 <span className="muted" style={{ fontSize: "0.875rem" }}>
