@@ -8,6 +8,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const next = searchParams.get("next") || "/dashboard";
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -15,7 +16,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     if (error) {
@@ -38,27 +39,20 @@ function LoginForm() {
         <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700 }}>BrowserBase</h1>
           <p className="muted" style={{ fontSize: "0.85rem", marginTop: 4 }}>
-            Sign in on any device
+            Sign in · MCP OAuth ready
           </p>
         </div>
         <div className="card">
-          <h2 style={{ textAlign: "center", fontSize: "1.1rem", marginBottom: "0.35rem" }}>
-            Sign in
-          </h2>
+          <h2 style={{ textAlign: "center", fontSize: "1.1rem", marginBottom: "0.35rem" }}>Sign in</h2>
           <p className="muted" style={{ textAlign: "center", fontSize: "0.8rem", marginBottom: "1.25rem" }}>
-            Get your API key & start sessions
+            Approve AI clients after login
           </p>
           {error && (
             <p style={{ color: "#f87171", textAlign: "center", fontSize: "0.85rem", marginBottom: "1rem" }}>
               Authentication failed. Try again.
             </p>
           )}
-          <button
-            className="btn btn-white"
-            style={{ width: "100%" }}
-            onClick={handleGoogleLogin}
-            disabled={loading}
-          >
+          <button className="btn btn-white" style={{ width: "100%" }} onClick={handleGoogleLogin} disabled={loading}>
             {loading ? "Redirecting..." : "Continue with Google"}
           </button>
         </div>

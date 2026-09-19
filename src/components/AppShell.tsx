@@ -30,7 +30,10 @@ const nav = [
   },
   {
     title: "Docs",
-    items: [{ href: "/docs", label: "API Docs" }],
+    items: [
+      { href: "/docs", label: "API Docs" },
+      { href: "/docs/mcp", label: "MCP Connect" },
+    ],
   },
 ];
 
@@ -78,14 +81,8 @@ export function AppShell({
 
   return (
     <div className="app-shell">
-      {/* Mobile top bar */}
       <div className="mobile-bar mobile-only">
-        <button
-          type="button"
-          className="menu-btn"
-          aria-label="Open menu"
-          onClick={() => setOpen(true)}
-        >
+        <button type="button" className="menu-btn" aria-label="Open menu" onClick={() => setOpen(true)}>
           ☰
         </button>
         <span className="mobile-bar-title">BrowserBase</span>
@@ -94,12 +91,7 @@ export function AppShell({
         </span>
       </div>
 
-      {/* Mobile drawer */}
-      <div
-        className={`drawer-backdrop${open ? " open" : ""}`}
-        onClick={() => setOpen(false)}
-        aria-hidden={!open}
-      />
+      <div className={`drawer-backdrop${open ? " open" : ""}`} onClick={() => setOpen(false)} aria-hidden={!open} />
       <nav className={`drawer${open ? " open" : ""}`} aria-label="Mobile navigation">
         <button type="button" className="drawer-close" onClick={() => setOpen(false)}>
           Close ✕
@@ -114,7 +106,6 @@ export function AppShell({
       </nav>
 
       <div className="app-body">
-        {/* Desktop sidebar */}
         <aside className="sidebar desktop-only">
           <div className="sidebar-brand">BrowserBase</div>
           <NavLinks active={active} />
@@ -124,7 +115,7 @@ export function AppShell({
           <header className="header desktop-only">
             <div className="header-inner" style={{ maxWidth: "none" }}>
               <span className="muted header-tagline" style={{ fontSize: "0.875rem" }}>
-                Cloud browsers · real sessions
+                Cloud browsers · MCP OAuth
               </span>
               <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                 <span className="muted" style={{ fontSize: "0.875rem" }}>
