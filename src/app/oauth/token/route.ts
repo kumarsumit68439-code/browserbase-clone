@@ -12,6 +12,23 @@ function verifyPkce(verifier: string, challenge: string, method: string) {
   return verifier === challenge;
 }
 
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: { Allow: "POST, OPTIONS", ...cors } });
+}
+
+export async function GET() {
+  return NextResponse.json(
+    { error: "method_not_allowed", error_description: "Use POST on the token endpoint" },
+    { status: 405, headers: { Allow: "POST, OPTIONS", ...cors } }
+  );
+}
+
 export async function POST(req: NextRequest) {
   const contentType = req.headers.get("content-type") || "";
   let body: Record<string, string> = {};
@@ -19,10 +36,14 @@ export async function POST(req: NextRequest) {
   if (contentType.includes("application/json")) {
     body = await req.json();
   } else {
-    const form = await req.formData();
-    form.forEach((v, k) => {
-      body[k] = String(v);
-    });
+    try {
+      const form = await req.formData();
+      form.forEach((v, k) => {
+        body[k] = String(v);
+      });
+    } catch {
+      body = {};
+    }
   }
 
   const grantType = body.grant_type;
@@ -35,7 +56,10 @@ export async function POST(req: NextRequest) {
     userAgent: req.headers.get("user-agent"),
   });
   if (!check.ok) {
-    return NextResponse.json({ error: "unauthorized_client", error_description: check.reason }, { status: 403 });
+    return NextResponse.json(
+      { error: "unauthorized_client", error_description: check.reason },
+      { status: 403, headers: cors }
+    );
   }
 
   if (grantType === "authorization_code") {
@@ -55,13 +79,19 @@ export async function POST(req: NextRequest) {
     }>(code);
 
     if (!payload || payload.typ !== "auth_code") {
-      return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
+      return NextResponse.json({ error: "invalid_grant" }, { status: 400, headers: cors });
     }
     if (redirectUri && payload.redirect_uri && redirectUri !== payload.redirect_uri) {
-      return NextResponse.json({ error: "invalid_grant", error_description: "redirect_uri mismatch" }, { status: 400 });
+      return NextResponse.json(
+        { error: "invalid_grant", error_description: "redirect_uri mismatch" },
+        { status: 400, headers: cors }
+      );
     }
     if (!verifyPkce(codeVerifier, payload.code_challenge, payload.code_challenge_method)) {
-      return NextResponse.json({ error: "invalid_grant", error_description: "pkce failed" }, { status: 400 });
+      return NextResponse.json(
+        { error: "invalid_grant", error_description: "pkce failed" },
+        { status: 400, headers: cors }
+      );
     }
 
     const accessToken = signPayload(
@@ -85,13 +115,16 @@ export async function POST(req: NextRequest) {
       3600 * 24 * 30
     );
 
-    return NextResponse.json({
-      access_token: accessToken,
-      token_type: "Bearer",
-      expires_in: 3600 * 8,
-      refresh_token: refreshToken,
-      scope: payload.scope,
-    });
+    return NextResponse.json(
+      {
+        access_token: accessToken,
+        token_type: "Bearer",
+        expires_in: 3600 * 8,
+        refresh_token: refreshToken,
+        scope: payload.scope,
+      },
+      { headers: cors }
+    );
   }
 
   if (grantType === "refresh_token") {
@@ -99,7 +132,7 @@ export async function POST(req: NextRequest) {
       body.refresh_token || ""
     );
     if (!refresh || refresh.typ !== "refresh") {
-      return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
+      return NextResponse.json({ error: "invalid_grant" }, { status: 400, headers: cors });
     }
     const accessToken = signPayload(
       {
@@ -111,13 +144,16 @@ export async function POST(req: NextRequest) {
       },
       3600 * 8
     );
-    return NextResponse.json({
-      access_token: accessToken,
-      token_type: "Bearer",
-      expires_in: 3600 * 8,
-      scope: refresh.scope,
-    });
+    return NextResponse.json(
+      {
+        access_token: accessToken,
+        token_type: "Bearer",
+        expires_in: 3600 * 8,
+        scope: refresh.scope,
+      },
+      { headers: cors }
+    );
   }
 
-  return NextResponse.json({ error: "unsupported_grant_type" }, { status: 400 });
+  return NextResponse.json({ error: "unsupported_grant_type" }, { status: 400, headers: cors });
 }

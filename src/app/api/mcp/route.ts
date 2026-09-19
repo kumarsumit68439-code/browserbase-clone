@@ -1,11 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { verifyPayload } from "@/lib/mcp/oauth-crypto";
-import { isAllowedMcpClient } from "@/lib/mcp/allowed-clients";
 import { generateSessionId } from "@/lib/keys";
 import { createRealBrowserSession } from "@/lib/browser-provider";
 
 export const dynamic = "force-dynamic";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, mcp-session-id",
+  "Access-Control-Expose-Headers": "mcp-session-id",
+};
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: corsHeaders });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: { Allow: "GET, POST, DELETE, OPTIONS", ...corsHeaders },
+  });
+}
 
 function getBearer(req: NextRequest): string | null {
   const auth = req.headers.get("authorization");
@@ -24,16 +41,7 @@ async function authMcp(req: NextRequest) {
   if (!token) return null;
   const payload = verifyPayload<{ typ: string; sub: string; client: string; scope: string }>(token);
   if (!payload || payload.typ !== "access") return null;
-
-  // Re-check client still allowed
-  const check = isAllowedMcpClient({
-    clientId: payload.client,
-    clientName: payload.client,
-    userAgent: req.headers.get("user-agent"),
-  });
-  // access tokens already bound to allowed client at issue time
   if (!payload.client) return null;
-
   return { userId: payload.sub, client: payload.client, scope: payload.scope };
 }
 
@@ -67,20 +75,17 @@ const TOOLS = [
     description: "Create a real browser session",
     inputSchema: {
       type: "object",
-      properties: {
-        region: { type: "string" },
-        timeout: { type: "number" },
-      },
+      properties: { region: { type: "string" }, timeout: { type: "number" } },
     },
   },
   {
     name: "get_docs",
-    description: "API endpoints, auth headers, and code examples (curl, React, FastAPI)",
+    description: "API endpoints, auth headers, and code examples",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "list_pages",
-    description: "List all product pages the MCP can represent",
+    description: "List all product pages",
     inputSchema: { type: "object", properties: {} },
   },
 ];
@@ -90,7 +95,11 @@ async function runTool(name: string, args: any, userId: string, origin: string) 
 
   if (name === "get_workspace") {
     const { data: project } = await db.from("bb_projects").select("*").eq("user_id", userId).limit(1).maybeSingle();
-    const { data: keys } = await db.from("bb_api_keys").select("id, full_key, active, created_at").eq("user_id", userId).eq("active", true);
+    const { data: keys } = await db
+      .from("bb_api_keys")
+      .select("id, full_key, active, created_at")
+      .eq("user_id", userId)
+      .eq("active", true);
     return {
       projectId: project?.id,
       projectName: project?.name,
@@ -155,7 +164,12 @@ async function runTool(name: string, args: any, userId: string, origin: string) 
   }
 
   if (name === "get_docs") {
-    const { data: keys } = await db.from("bb_api_keys").select("full_key").eq("user_id", userId).eq("active", true).limit(1);
+    const { data: keys } = await db
+      .from("bb_api_keys")
+      .select("full_key")
+      .eq("user_id", userId)
+      .eq("active", true)
+      .limit(1);
     const { data: project } = await db.from("bb_projects").select("id").eq("user_id", userId).limit(1).maybeSingle();
     const key = keys?.[0]?.full_key || "bb_...";
     const pid = project?.id || "proj_...";
@@ -174,7 +188,6 @@ async function runTool(name: string, args: any, userId: string, origin: string) 
         { method: "GET", path: "/api/v1/sessions/:id" },
         { method: "POST", path: "/api/mcp" },
       ],
-      curl: `curl -X POST ${origin}/api/v1/sessions -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" -d '{"region":"us-west-2"}'`,
     };
   }
 
@@ -199,92 +212,10 @@ async function runTool(name: string, args: any, userId: string, origin: string) 
   return { error: `Unknown tool: ${name}` };
 }
 
-export async function POST(req: NextRequest) {
-  const origin = req.nextUrl.origin;
-  const auth = await authMcp(req);
-
-  // Allow tools/list without auth for discovery, but mark restricted
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
-  }
-
-  const method = body.method as string;
-  const id = body.id ?? null;
-
-  if (method === "initialize") {
-    return NextResponse.json({
-      jsonrpc: "2.0",
-      id,
-      result: {
-        protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
-        serverInfo: { name: "browserbase-clone-mcp", version: "1.0.0" },
-        instructions:
-          "OAuth required. Allowed clients only: ChatGPT, Claude, Gemini, Grok, Lovable, Base44.ai, Cursor, Codex. Connect via /oauth/authorize then call tools with Bearer access_token.",
-      },
-    });
-  }
-
-  if (method === "tools/list") {
-    return NextResponse.json({
-      jsonrpc: "2.0",
-      id,
-      result: { tools: TOOLS },
-    });
-  }
-
-  if (method === "tools/call") {
-    if (!auth) {
-      return NextResponse.json(
-        {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: -32001,
-            message: "Unauthorized. Complete OAuth at /oauth/authorize. Only allowed AI clients may connect.",
-          },
-        },
-        { status: 401 }
-      );
-    }
-
-    const toolName = body.params?.name;
-    const args = body.params?.arguments || {};
-    try {
-      const result = await runTool(toolName, args, auth.userId, origin);
-      return NextResponse.json({
-        jsonrpc: "2.0",
-        id,
-        result: {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        },
-      });
-    } catch (e: any) {
-      return NextResponse.json({
-        jsonrpc: "2.0",
-        id,
-        error: { code: -32000, message: e?.message || "tool_error" },
-      });
-    }
-  }
-
-  if (method === "ping") {
-    return NextResponse.json({ jsonrpc: "2.0", id, result: {} });
-  }
-
-  return NextResponse.json({
-    jsonrpc: "2.0",
-    id,
-    error: { code: -32601, message: `Method not found: ${method}` },
-  });
-}
-
 export async function GET(req: NextRequest) {
   const origin = req.nextUrl.origin;
-  return NextResponse.json({
+  // Discovery + health for connectors that probe with GET
+  return json({
     name: "BrowserBase MCP",
     mcp_url: `${origin}/api/mcp`,
     oauth: {
@@ -293,6 +224,86 @@ export async function GET(req: NextRequest) {
       metadata: `${origin}/.well-known/oauth-authorization-server`,
     },
     allowed_clients: ["chatgpt", "claude", "gemini", "grok", "lovable", "base44", "cursor", "codex"],
-    note: "Other clients receive 403 unauthorized_client",
+    protocol: "json-rpc-2.0",
+    methods: ["initialize", "tools/list", "tools/call", "ping"],
   });
+}
+
+export async function POST(req: NextRequest) {
+  const origin = req.nextUrl.origin;
+  const auth = await authMcp(req);
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "invalid_json" }, 400);
+  }
+
+  const method = body.method as string;
+  const id = body.id ?? null;
+
+  if (method === "initialize") {
+    return json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: "2024-11-05",
+        capabilities: { tools: {} },
+        serverInfo: { name: "browserbase-clone-mcp", version: "1.0.0" },
+        instructions:
+          "OAuth required. Allowed: ChatGPT, Claude, Gemini, Grok, Lovable, Base44, Cursor, Codex.",
+      },
+    });
+  }
+
+  if (method === "tools/list" || method === "tools/listChanged") {
+    return json({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
+  }
+
+  if (method === "tools/call") {
+    if (!auth) {
+      return json(
+        {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: -32001,
+            message: "Unauthorized. Complete OAuth at /oauth/authorize first.",
+          },
+        },
+        401
+      );
+    }
+    const toolName = body.params?.name;
+    const args = body.params?.arguments || {};
+    try {
+      const result = await runTool(toolName, args, auth.userId, origin);
+      return json({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] },
+      });
+    } catch (e: any) {
+      return json({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32000, message: e?.message || "tool_error" },
+      });
+    }
+  }
+
+  if (method === "ping" || method === "notifications/initialized") {
+    return json({ jsonrpc: "2.0", id, result: {} });
+  }
+
+  return json({
+    jsonrpc: "2.0",
+    id,
+    error: { code: -32601, message: `Method not found: ${method}` },
+  });
+}
+
+export async function DELETE() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }

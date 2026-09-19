@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAllowedMcpClient } from "@/lib/mcp/allowed-clients";
 
-export async function GET(req: NextRequest) {
+function handleAuthorize(req: NextRequest) {
   const url = req.nextUrl;
   const clientId = url.searchParams.get("client_id") || "";
   const redirectUri = url.searchParams.get("redirect_uri") || "";
@@ -25,7 +25,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (!redirectUri) {
-    return NextResponse.json({ error: "invalid_request", error_description: "redirect_uri required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "invalid_request", error_description: "redirect_uri required" },
+      { status: 400 }
+    );
   }
 
   const approve = new URL("/oauth/approve", url.origin);
@@ -39,4 +42,40 @@ export async function GET(req: NextRequest) {
   approve.searchParams.set("code_challenge_method", codeChallengeMethod);
 
   return NextResponse.redirect(approve.toString());
+}
+
+export async function GET(req: NextRequest) {
+  return handleAuthorize(req);
+}
+
+export async function POST(req: NextRequest) {
+  // Some clients POST form fields instead of query string
+  const contentType = req.headers.get("content-type") || "";
+  if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+    const form = await req.formData();
+    const url = req.nextUrl.clone();
+    form.forEach((v, k) => url.searchParams.set(k, String(v)));
+    return handleAuthorize(new NextRequest(url, { headers: req.headers }));
+  }
+  if (contentType.includes("application/json")) {
+    const body = await req.json();
+    const url = req.nextUrl.clone();
+    Object.entries(body || {}).forEach(([k, v]) => {
+      if (v != null) url.searchParams.set(k, String(v));
+    });
+    return handleAuthorize(new NextRequest(url, { headers: req.headers }));
+  }
+  return handleAuthorize(req);
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      Allow: "GET, POST, OPTIONS",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 }
