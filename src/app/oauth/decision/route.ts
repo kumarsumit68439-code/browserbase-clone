@@ -50,14 +50,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.redirect(target.toString());
   }
 
-  if (!codeChallenge) {
-    target.searchParams.set("error", "invalid_request");
-    target.searchParams.set("error_description", "PKCE code_challenge missing");
-    if (state) target.searchParams.set("state", state);
-    return NextResponse.redirect(target.toString());
-  }
-
-  // Authorization code binds PKCE challenge + user + client + redirect
   const code = signPayload(
     {
       typ: "auth_code",
@@ -71,7 +63,7 @@ export async function POST(req: NextRequest) {
       resource: resource || undefined,
       jti: randomCode(),
     },
-    300 // 5 minutes
+    300
   );
 
   target.searchParams.set("code", code);
