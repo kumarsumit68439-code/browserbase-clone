@@ -9,6 +9,7 @@ const nav = [
     items: [
       { href: "/dashboard", label: "Home" },
       { href: "/api-keys", label: "API Keys" },
+      { href: "/ai-keys", label: "AI API Keys" },
       { href: "/users", label: "Users" },
       { href: "/email-alerts", label: "Email Alerts" },
     ],
@@ -115,7 +116,7 @@ export function AppShell({
           <header className="header desktop-only">
             <div className="header-inner" style={{ maxWidth: "none" }}>
               <span className="muted header-tagline" style={{ fontSize: "0.875rem" }}>
-                Cloud browsers · MCP OAuth
+                Cloud browsers · AI keys · MCP
               </span>
               <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                 <span className="muted" style={{ fontSize: "0.875rem" }}>
