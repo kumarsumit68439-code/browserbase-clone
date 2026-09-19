@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { authRequest } from "@/lib/api-auth";
+import { firebaseWrite, firebaseDelete, firebaseList, getFirebaseConfig } from "@/lib/firebase";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,6 @@ function serviceDb() {
   return createServiceClient(url, key);
 }
 
-/**
- * Generic backend data API for external websites.
- * Stores JSON documents in bb_backend_docs (or falls back to user_metadata JSON on projects).
- * Body: { collection, action: "list"|"get"|"insert"|"update"|"delete", id?, data? }
- */
 export async function POST(req: NextRequest) {
   const auth = await authRequest(req);
   if (!auth) {
@@ -40,9 +36,10 @@ export async function POST(req: NextRequest) {
 
   const collection = String(body.collection || body.table || "default").slice(0, 64);
   const action = String(body.action || "list");
+  const dualWrite = body.dual_write !== false; // default true when Firebase configured
   const db = serviceDb();
+  const firebaseOn = Boolean(getFirebaseConfig()?.databaseURL);
 
-  // Prefer dedicated table; if missing, use project user_metadata bag
   try {
     if (action === "list") {
       const { data, error } = await db
@@ -53,7 +50,22 @@ export async function POST(req: NextRequest) {
         .order("created_at", { ascending: false })
         .limit(Math.min(Number(body.limit) || 50, 100));
       if (error) throw error;
-      return NextResponse.json({ collection, docs: data || [], backend: "supabase" }, { headers: cors });
+
+      let firebaseDocs: any[] | undefined;
+      if (firebaseOn && body.include_firebase) {
+        const fb = await firebaseList(collection);
+        if (fb.ok) firebaseDocs = fb.docs;
+      }
+
+      return NextResponse.json(
+        {
+          collection,
+          docs: data || [],
+          firebase_docs: firebaseDocs,
+          backends: { supabase: true, firebase: firebaseOn },
+        },
+        { headers: cors }
+      );
     }
 
     if (action === "get") {
@@ -65,36 +77,64 @@ export async function POST(req: NextRequest) {
         .eq("id", body.id)
         .maybeSingle();
       if (error) throw error;
-      return NextResponse.json({ doc: data }, { headers: cors });
+      return NextResponse.json({ doc: data, backends: { supabase: true, firebase: firebaseOn } }, { headers: cors });
     }
 
     if (action === "insert") {
       const id = body.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const payload = body.data || body.document || {};
       const row = {
         id,
         user_id: auth.userId,
         project_id: auth.projectId,
         collection,
-        data: body.data || body.document || {},
+        data: payload,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       const { data, error } = await db.from("bb_backend_docs").insert(row).select().single();
       if (error) throw error;
-      return NextResponse.json({ doc: data, backend: "supabase" }, { status: 201, headers: cors });
+
+      let firebase: { ok: boolean; error?: string } | undefined;
+      if (dualWrite && firebaseOn) {
+        firebase = await firebaseWrite(collection, id, {
+          ...payload,
+          user_id: auth.userId,
+          project_id: auth.projectId,
+        });
+      }
+
+      return NextResponse.json(
+        {
+          doc: data,
+          backends: { supabase: true, firebase: firebaseOn },
+          firebase_write: firebase,
+        },
+        { status: 201, headers: cors }
+      );
     }
 
     if (action === "update") {
+      const payload = body.data || body.document || {};
       const { data, error } = await db
         .from("bb_backend_docs")
-        .update({ data: body.data || body.document || {}, updated_at: new Date().toISOString() })
+        .update({ data: payload, updated_at: new Date().toISOString() })
         .eq("user_id", auth.userId)
         .eq("collection", collection)
         .eq("id", body.id)
         .select()
         .single();
       if (error) throw error;
-      return NextResponse.json({ doc: data }, { headers: cors });
+
+      let firebase: { ok: boolean; error?: string } | undefined;
+      if (dualWrite && firebaseOn) {
+        firebase = await firebaseWrite(collection, body.id, {
+          ...payload,
+          user_id: auth.userId,
+        });
+      }
+
+      return NextResponse.json({ doc: data, firebase_write: firebase }, { headers: cors });
     }
 
     if (action === "delete") {
@@ -105,28 +145,21 @@ export async function POST(req: NextRequest) {
         .eq("collection", collection)
         .eq("id", body.id);
       if (error) throw error;
-      return NextResponse.json({ ok: true }, { headers: cors });
+
+      let firebase: { ok: boolean; error?: string } | undefined;
+      if (dualWrite && firebaseOn) {
+        firebase = await firebaseDelete(collection, body.id);
+      }
+
+      return NextResponse.json({ ok: true, firebase_write: firebase }, { headers: cors });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400, headers: cors });
   } catch (e: any) {
-    // Table may not exist — return clear setup SQL
     return NextResponse.json(
       {
         error: e?.message || "Database error",
-        hint: "Create table bb_backend_docs in Supabase (SQL below)",
-        sql: `create table if not exists bb_backend_docs (
-  id text primary key,
-  user_id uuid not null,
-  project_id text,
-  collection text not null,
-  data jsonb default '{}',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-create index if not exists bb_backend_docs_user_coll on bb_backend_docs(user_id, collection);`,
-        firebase_note:
-          "Optional: set FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY for dual-write.",
+        backends: { supabase: true, firebase: firebaseOn },
       },
       { status: 500, headers: cors }
     );
@@ -139,6 +172,8 @@ export async function GET(req: NextRequest) {
 
   const collection = req.nextUrl.searchParams.get("collection") || "default";
   const db = serviceDb();
+  const firebaseOn = Boolean(getFirebaseConfig()?.databaseURL);
+
   try {
     const { data, error } = await db
       .from("bb_backend_docs")
@@ -148,7 +183,10 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) throw error;
-    return NextResponse.json({ collection, docs: data || [] }, { headers: cors });
+    return NextResponse.json(
+      { collection, docs: data || [], backends: { supabase: true, firebase: firebaseOn } },
+      { headers: cors }
+    );
   } catch (e: any) {
     return NextResponse.json({ error: e?.message, docs: [] }, { status: 500, headers: cors });
   }
