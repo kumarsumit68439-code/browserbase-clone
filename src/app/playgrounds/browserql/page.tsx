@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { AppShell } from "@/components/AppShell";
 
 export default function BrowserQLPage() {
   const [apiKey, setApiKey] = useState("");
@@ -10,7 +10,6 @@ export default function BrowserQLPage() {
     id
     status
     connectUrl
-    region
   }
 }`);
   const [result, setResult] = useState("");
@@ -20,14 +19,11 @@ export default function BrowserQLPage() {
     setLoading(true);
     setResult("");
     try {
-      // BrowserQL maps to REST sessions create for now
       const res = await fetch("/api/v1/sessions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(apiKey
-            ? { "x-bb-api-key": apiKey, Authorization: `Bearer ${apiKey}` }
-            : {}),
+          ...(apiKey ? { "x-bb-api-key": apiKey, Authorization: `Bearer ${apiKey}` } : {}),
         },
         body: JSON.stringify({ region: "us-west-2", timeout: 300 }),
       });
@@ -41,38 +37,36 @@ export default function BrowserQLPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex" }}>
-      <aside style={{ width: 240, borderRight: "1px solid #27272a", background: "#09090b", padding: "1.25rem 0.75rem" }}>
-        <Link href="/dashboard" style={{ fontWeight: 700, display: "block", marginBottom: 16, padding: "0 0.75rem" }}>BrowserBase</Link>
-        <Link href="/playgrounds/browserql" style={{ display: "block", padding: "0.45rem 0.75rem", background: "#27272a", borderRadius: 8, fontSize: "0.875rem" }}>BrowserQL Editor</Link>
-        <Link href="/playgrounds/rest" className="muted" style={{ display: "block", padding: "0.45rem 0.75rem", fontSize: "0.875rem" }}>REST API Playground</Link>
-        <Link href="/docs" className="muted" style={{ display: "block", padding: "0.45rem 0.75rem", fontSize: "0.875rem" }}>Docs</Link>
-      </aside>
-      <main className="container" style={{ paddingTop: "1.75rem", flex: 1 }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700 }}>BrowserQL Editor</h1>
-        <p className="muted" style={{ marginBottom: "1.25rem" }}>
-          GraphQL-style session control (executes against live Sessions API)
-        </p>
-        <label className="muted" style={{ fontSize: "0.8rem" }}>API Key</label>
-        <input
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="bb_..."
-          style={{ display: "block", width: "100%", margin: "4px 0 12px", padding: "0.6rem", borderRadius: 8, border: "1px solid #27272a", background: "#09090b", color: "#fff" }}
-        />
-        <textarea
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          rows={12}
-          style={{ width: "100%", padding: "0.75rem", borderRadius: 8, border: "1px solid #27272a", background: "#09090b", color: "#e4e4e7", fontFamily: "monospace", fontSize: "0.85rem" }}
-        />
-        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={run} disabled={loading}>
-          {loading ? "Running…" : "Execute"}
-        </button>
-        <div className="card" style={{ marginTop: 16 }}>
-          <pre className="mono" style={{ whiteSpace: "pre-wrap", fontSize: "0.8rem" }}>{result || "Result will appear here"}</pre>
-        </div>
-      </main>
-    </div>
+    <AppShell active="/playgrounds/browserql">
+      <h1 className="page-title">BrowserQL Editor</h1>
+      <p className="page-sub">Runs against live Sessions API</p>
+      <label className="muted" style={{ fontSize: "0.8rem" }}>API Key</label>
+      <input
+        value={apiKey}
+        onChange={(e) => setApiKey(e.target.value)}
+        placeholder="bb_..."
+        style={field}
+      />
+      <textarea value={query} onChange={(e) => setQuery(e.target.value)} rows={10} style={{ ...field, fontFamily: "monospace" }} />
+      <button className="btn btn-primary" onClick={run} disabled={loading} style={{ width: "100%", maxWidth: 280 }}>
+        {loading ? "Running…" : "Execute"}
+      </button>
+      <div className="card" style={{ marginTop: 12 }}>
+        <pre className="mono code-block" style={{ whiteSpace: "pre-wrap" }}>{result || "Result will appear here"}</pre>
+      </div>
+    </AppShell>
   );
 }
+
+const field: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  marginTop: 4,
+  marginBottom: 12,
+  padding: "0.65rem 0.75rem",
+  borderRadius: 8,
+  border: "1px solid #27272a",
+  background: "#09090b",
+  color: "#fff",
+  fontSize: "0.875rem",
+};
