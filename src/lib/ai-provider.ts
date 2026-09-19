@@ -1,4 +1,6 @@
-/** Free / open models — Groq free tier + OpenRouter :free (verified Sep 2026) */
+/** Free / open models — Groq free tier + OpenRouter :free (verified Sep 2026)
+ * Redeploy note: runtime keys GROQ_API_KEY / OPENROUTER_API_KEY from Vercel Production env.
+ */
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -43,10 +45,23 @@ export const OPEN_MODELS = [
 
 function pickProvider(modelId?: string): "groq" | "openrouter" | "custom" | null {
   const m = modelId || "";
-  if (m.includes(":free") || m.startsWith("openrouter/") || m.includes("nemotron") || m.includes("laguna") || m.includes("inclusionai") || m.includes("deepseek/") || m.includes("gemma-4") || m.includes("z-ai/") || m.includes("thinkingmachines") || m.includes("liquid/") || m.includes("nex-agi") || m.includes("cohere/") || m.includes("dots-studio")) {
+  if (
+    m.includes(":free") ||
+    m.startsWith("openrouter/") ||
+    m.includes("nemotron") ||
+    m.includes("laguna") ||
+    m.includes("inclusionai") ||
+    m.includes("deepseek/") ||
+    m.includes("gemma-4") ||
+    m.includes("z-ai/") ||
+    m.includes("thinkingmachines") ||
+    m.includes("liquid/") ||
+    m.includes("nex-agi") ||
+    m.includes("cohere/") ||
+    m.includes("dots-studio")
+  ) {
     return process.env.OPENROUTER_API_KEY ? "openrouter" : null;
   }
-  // Groq-native ids
   if (
     m.startsWith("llama-") ||
     m.startsWith("groq/") ||
@@ -66,46 +81,49 @@ function pickProvider(modelId?: string): "groq" | "openrouter" | "custom" | null
 }
 
 export function getAiConfig(preferredModel?: string) {
-  const provider = pickProvider(preferredModel);
-  const modelFromList = OPEN_MODELS.find((x) => x.id === preferredModel);
+  const groqKey = process.env.GROQ_API_KEY?.trim();
+  const orKey = process.env.OPENROUTER_API_KEY?.trim();
+  const customKey = process.env.AI_API_KEY?.trim();
 
-  if (provider === "openrouter" && process.env.OPENROUTER_API_KEY) {
+  const provider = pickProvider(preferredModel);
+
+  if (provider === "openrouter" && orKey) {
     return {
       provider: "openrouter" as const,
       baseUrl: "https://openrouter.ai/api/v1",
-      apiKey: process.env.OPENROUTER_API_KEY,
+      apiKey: orKey,
       model: preferredModel || process.env.AI_MODEL || "openrouter/free",
       label: "OpenRouter · free models",
     };
   }
 
-  if (provider === "groq" && process.env.GROQ_API_KEY) {
+  if (provider === "groq" && groqKey) {
     return {
       provider: "groq" as const,
       baseUrl: "https://api.groq.com/openai/v1",
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey: groqKey,
       model: preferredModel || process.env.AI_MODEL || "llama-3.1-8b-instant",
       label: "Groq · free tier",
     };
   }
 
-  // Fallbacks if preferred provider key missing
-  if (process.env.OPENROUTER_API_KEY) {
+  if (orKey) {
     return {
       provider: "openrouter" as const,
       baseUrl: "https://openrouter.ai/api/v1",
-      apiKey: process.env.OPENROUTER_API_KEY,
-      model: preferredModel?.includes(":free") || preferredModel?.startsWith("openrouter")
-        ? preferredModel!
-        : "openrouter/free",
+      apiKey: orKey,
+      model:
+        preferredModel?.includes(":free") || preferredModel?.startsWith("openrouter")
+          ? preferredModel!
+          : "openrouter/free",
       label: "OpenRouter · free models",
     };
   }
-  if (process.env.GROQ_API_KEY) {
+  if (groqKey) {
     return {
       provider: "groq" as const,
       baseUrl: "https://api.groq.com/openai/v1",
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey: groqKey,
       model:
         preferredModel && !preferredModel.includes(":free")
           ? preferredModel
@@ -113,13 +131,13 @@ export function getAiConfig(preferredModel?: string) {
       label: "Groq · free tier",
     };
   }
-  if (process.env.AI_API_KEY) {
+  if (customKey) {
     return {
       provider: "custom" as const,
       baseUrl: process.env.AI_BASE_URL || "https://api.openai.com/v1",
-      apiKey: process.env.AI_API_KEY,
+      apiKey: customKey,
       model: preferredModel || process.env.AI_MODEL || "gpt-4o-mini",
-      label: modelFromList?.label || "Custom",
+      label: "Custom",
     };
   }
   return null;
@@ -137,7 +155,7 @@ export async function callOpenSourceChat(
   const cfg = getAiConfig(opts?.model);
   if (!cfg) {
     throw new Error(
-      "No free AI provider key. Set GROQ_API_KEY and/or OPENROUTER_API_KEY in Vercel env."
+      "No free AI provider key. Set GROQ_API_KEY and/or OPENROUTER_API_KEY in Vercel env, then Redeploy."
     );
   }
 
