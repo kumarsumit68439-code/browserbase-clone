@@ -54,9 +54,7 @@ export async function POST(req: NextRequest) {
   if (!messages.some((m) => m.role === "system")) {
     messages.unshift({
       role: "system",
-      content:
-        body.system ||
-        "You are BrowserBase AI Agent. Be concise and accurate.",
+      content: body.system || "You are BrowserBase AI Agent. Be concise and accurate.",
     });
   }
 
@@ -103,3 +101,16 @@ export async function GET() {
       endpoint: "POST /api/v1/ai/chat",
       auth: ["Authorization: Bearer bb_ai_...", "x-bb-api-key: bb_ai_..."],
       cors: "*",
+      provider_configured: Boolean(cfg),
+      provider: cfg?.label || null,
+      models: OPEN_MODELS,
+      body: {
+        message: "string",
+        model: "optional model id",
+        system: "optional system prompt",
+        messages: "optional OpenAI-style array",
+      },
+    },
+    { headers: cors }
+  );
+}

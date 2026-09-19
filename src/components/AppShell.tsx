@@ -17,6 +17,7 @@ const nav = [
   {
     title: "Playgrounds",
     items: [
+      { href: "/playgrounds/ai", label: "AI Playground" },
       { href: "/playgrounds/browserql", label: "BrowserQL" },
       { href: "/playgrounds/baas-debugger", label: "BaaS Debugger" },
       { href: "/playgrounds/rest", label: "REST Playground" },
@@ -116,7 +117,7 @@ export function AppShell({
           <header className="header desktop-only">
             <div className="header-inner" style={{ maxWidth: "none" }}>
               <span className="muted header-tagline" style={{ fontSize: "0.875rem" }}>
-                Cloud browsers · AI keys · MCP
+                AI Playground · keys · MCP
               </span>
               <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                 <span className="muted" style={{ fontSize: "0.875rem" }}>
