@@ -4,7 +4,7 @@ import { normalizeChallengeMethod } from "@/lib/mcp/pkce";
 
 function handleAuthorize(req: NextRequest) {
   const url = req.nextUrl;
-  const clientId = url.searchParams.get("client_id") || "";
+  const clientId = url.searchParams.get("client_id") || "bb_mcp_chatgpt";
   const redirectUri = url.searchParams.get("redirect_uri") || "";
   const state = url.searchParams.get("state") || "";
   const scope = url.searchParams.get("scope") || "mcp";
@@ -18,7 +18,7 @@ function handleAuthorize(req: NextRequest) {
 
   if (responseType !== "code") {
     return NextResponse.json(
-      { error: "unsupported_response_type", error_description: "Only response_type=code is supported" },
+      { error: "unsupported_response_type", error_description: "Only response_type=code" },
       { status: 400 }
     );
   }
@@ -30,13 +30,10 @@ function handleAuthorize(req: NextRequest) {
   });
 
   if (!check.ok) {
-    // Still allow if client looks like MCP + has PKCE (public client)
-    if (!codeChallenge) {
-      return NextResponse.json(
-        { error: "unauthorized_client", error_description: check.reason },
-        { status: 403 }
-      );
-    }
+    return NextResponse.json(
+      { error: "unauthorized_client", error_description: check.reason },
+      { status: 403 }
+    );
   }
 
   if (!redirectUri) {
@@ -46,33 +43,19 @@ function handleAuthorize(req: NextRequest) {
     );
   }
 
-  // PKCE required for public / MCP clients (token_endpoint_auth_method=none)
-  if (!codeChallenge) {
-    return NextResponse.json(
-      {
-        error: "invalid_request",
-        error_description:
-          "PKCE required. Send code_challenge (S256) and later code_verifier on /oauth/token.",
-      },
-      { status: 400 }
-    );
-  }
-
-  if (codeChallenge.length < 43 && codeChallengeMethod === "S256") {
-    // S256 challenges are 43 chars base64url; plain can vary — soft check only for S256 shape
-  }
-
-  const allowedClient = check.ok ? check.client : clientId || "mcp-public";
+  // PKCE recommended; if missing we still allow (some connectors omit) — bind empty challenge
+  const challenge = codeChallenge || "";
+  const method = challenge ? codeChallengeMethod : "S256";
 
   const approve = new URL("/oauth/approve", url.origin);
   approve.searchParams.set("client_id", clientId);
-  approve.searchParams.set("client_name", clientName || allowedClient);
-  approve.searchParams.set("allowed_client", allowedClient);
+  approve.searchParams.set("client_name", clientName || check.client);
+  approve.searchParams.set("allowed_client", check.client);
   approve.searchParams.set("redirect_uri", redirectUri);
   approve.searchParams.set("state", state);
   approve.searchParams.set("scope", scope);
-  approve.searchParams.set("code_challenge", codeChallenge);
-  approve.searchParams.set("code_challenge_method", codeChallengeMethod);
+  approve.searchParams.set("code_challenge", challenge);
+  approve.searchParams.set("code_challenge_method", method);
   if (resource) approve.searchParams.set("resource", resource);
 
   return NextResponse.redirect(approve.toString());

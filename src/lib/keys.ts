@@ -8,11 +8,19 @@ export function generateApiKey(): { fullKey: string; prefix: string; hash: strin
   return { fullKey, prefix, hash };
 }
 
-/** Dedicated AI response API key */
 export function generateAiApiKey(): { fullKey: string; prefix: string; hash: string } {
   const raw = randomBytes(24).toString("hex");
   const fullKey = `bb_ai_${raw}`;
   const prefix = fullKey.slice(0, 12);
+  const hash = createHash("sha256").update(fullKey).digest("hex");
+  return { fullKey, prefix, hash };
+}
+
+/** Backend-as-a-service API key for external websites */
+export function generateBackendApiKey(): { fullKey: string; prefix: string; hash: string } {
+  const raw = randomBytes(24).toString("hex");
+  const fullKey = `bb_backend_${raw}`;
+  const prefix = fullKey.slice(0, 14);
   const hash = createHash("sha256").update(fullKey).digest("hex");
   return { fullKey, prefix, hash };
 }

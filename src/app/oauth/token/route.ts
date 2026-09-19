@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPayload, signPayload, randomCode } from "@/lib/mcp/oauth-crypto";
 import { isAllowedMcpClient } from "@/lib/mcp/allowed-clients";
+import { verifyClientSecret } from "@/lib/mcp/clients";
 import { verifyPkce } from "@/lib/mcp/pkce";
 
 const cors = {
@@ -15,7 +16,7 @@ export async function OPTIONS() {
 
 export async function GET() {
   return NextResponse.json(
-    { error: "method_not_allowed", error_description: "Use POST on the token endpoint" },
+    { error: "method_not_allowed", error_description: "Use POST" },
     { status: 405, headers: { Allow: "POST, OPTIONS", ...cors } }
   );
 }
@@ -41,24 +42,39 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Basic auth header support
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.toLowerCase().startsWith("basic ")) {
+    try {
+      const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
+      const [id, secret] = decoded.split(":");
+      if (id && !body.client_id) body.client_id = id;
+      if (secret && !body.client_secret) body.client_secret = secret;
+    } catch {}
+  }
+
   const grantType = body.grant_type;
   const clientId = body.client_id || "";
+  const clientSecret = body.client_secret || "";
   const clientName = body.client_name || clientId;
 
-  // Public PKCE clients often send client_id only (token_endpoint_auth_method=none)
-  if (clientId) {
-    const check = isAllowedMcpClient({
-      clientId,
-      clientName,
-      userAgent: req.headers.get("user-agent"),
-    });
-    // Soft: allow token exchange if auth code is valid even when client string is custom
-    if (!check.ok && !body.code && !body.refresh_token) {
-      return NextResponse.json(
-        { error: "unauthorized_client", error_description: check.reason },
-        { status: 403, headers: cors }
-      );
-    }
+  if (clientId && !verifyClientSecret(clientId, clientSecret)) {
+    return NextResponse.json(
+      { error: "invalid_client", error_description: "Bad client_secret" },
+      { status: 401, headers: cors }
+    );
+  }
+
+  const check = isAllowedMcpClient({
+    clientId,
+    clientName,
+    userAgent: req.headers.get("user-agent"),
+  });
+  if (!check.ok && clientId) {
+    return NextResponse.json(
+      { error: "unauthorized_client", error_description: check.reason },
+      { status: 403, headers: cors }
+    );
   }
 
   if (grantType === "authorization_code") {
@@ -80,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     if (!payload || payload.typ !== "auth_code") {
       return NextResponse.json(
-        { error: "invalid_grant", error_description: "Invalid or expired authorization code" },
+        { error: "invalid_grant", error_description: "Invalid or expired code" },
         { status: 400, headers: cors }
       );
     }
@@ -92,27 +108,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Real PKCE: code_verifier MUST match code_challenge from authorize
-    if (!payload.code_challenge) {
-      return NextResponse.json(
-        { error: "invalid_grant", error_description: "Authorization code missing PKCE binding" },
-        { status: 400, headers: cors }
-      );
-    }
-    if (!codeVerifier) {
-      return NextResponse.json(
-        {
-          error: "invalid_request",
-          error_description: "code_verifier required (PKCE). Use token_endpoint_auth_method=none with PKCE.",
-        },
-        { status: 400, headers: cors }
-      );
-    }
-    if (!verifyPkce(codeVerifier, payload.code_challenge, payload.code_challenge_method)) {
-      return NextResponse.json(
-        { error: "invalid_grant", error_description: "PKCE verification failed (S256)" },
-        { status: 400, headers: cors }
-      );
+    // PKCE: if challenge was set at authorize, verifier required
+    if (payload.code_challenge) {
+      if (!codeVerifier) {
+        return NextResponse.json(
+          { error: "invalid_request", error_description: "code_verifier required" },
+          { status: 400, headers: cors }
+        );
+      }
+      if (!verifyPkce(codeVerifier, payload.code_challenge, payload.code_challenge_method)) {
+        return NextResponse.json(
+          { error: "invalid_grant", error_description: "PKCE verification failed" },
+          { status: 400, headers: cors }
+        );
+      }
     }
 
     const accessToken = signPayload(
@@ -177,8 +186,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Client credentials (simple machine token for fixed clients — optional)
+  if (grantType === "client_credentials") {
+    if (!clientId || !verifyClientSecret(clientId, clientSecret) || !clientSecret) {
+      return NextResponse.json({ error: "invalid_client" }, { status: 401, headers: cors });
+    }
+    const accessToken = signPayload(
+      {
+        typ: "access",
+        sub: `client:${clientId}`,
+        client: check.ok ? check.client : clientId,
+        scope: body.scope || "mcp",
+        jti: randomCode(),
+      },
+      3600
+    );
+    return NextResponse.json(
+      { access_token: accessToken, token_type: "Bearer", expires_in: 3600, scope: body.scope || "mcp" },
+      { headers: cors }
+    );
+  }
+
   return NextResponse.json(
-    { error: "unsupported_grant_type", error_description: "Use authorization_code or refresh_token" },
+    { error: "unsupported_grant_type" },
     { status: 400, headers: cors }
   );
 }
