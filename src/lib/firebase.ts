@@ -1,6 +1,6 @@
 /**
  * Firebase Realtime Database (REST) — server-side dual-write helper.
- * Client config values come from env (never hardcode secrets in production).
+ * Project: github-outh (env-driven)
  */
 
 export function getFirebaseConfig() {
@@ -16,9 +16,7 @@ export function getFirebaseConfig() {
 
   const url =
     databaseURL ||
-    (projectId
-      ? `https://${projectId}-default-rtdb.firebaseio.com`
-      : null);
+    (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : null);
 
   return {
     apiKey: apiKey || "",
