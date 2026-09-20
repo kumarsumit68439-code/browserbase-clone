@@ -11,8 +11,16 @@ const nav = [
       { href: "/api-keys", label: "API Keys" },
       { href: "/ai-keys", label: "AI API Keys" },
       { href: "/backend-keys", label: "Backend Keys" },
+      { href: "/backend", label: "Backend Service" },
       { href: "/users", label: "Users" },
       { href: "/email-alerts", label: "Email Alerts" },
+    ],
+  },
+  {
+    title: "Data",
+    items: [
+      { href: "/database", label: "Realtime Database" },
+      { href: "/sql-editor", label: "SQL Editor" },
     ],
   },
   {
@@ -118,7 +126,7 @@ export function AppShell({
           <header className="header desktop-only">
             <div className="header-inner" style={{ maxWidth: "none" }}>
               <span className="muted header-tagline" style={{ fontSize: "0.875rem" }}>
-                Backend · AI · MCP OAuth
+                SQL · Database · Backend
               </span>
               <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                 <span className="muted" style={{ fontSize: "0.875rem" }}>
