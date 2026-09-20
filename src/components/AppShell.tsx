@@ -20,7 +20,9 @@ const nav = [
     title: "Data",
     items: [
       { href: "/database", label: "Realtime Database" },
+      { href: "/database/tables", label: "Table Editor" },
       { href: "/sql-editor", label: "SQL Editor" },
+      { href: "/storage", label: "Storage" },
     ],
   },
   {
@@ -126,7 +128,7 @@ export function AppShell({
           <header className="header desktop-only">
             <div className="header-inner" style={{ maxWidth: "none" }}>
               <span className="muted header-tagline" style={{ fontSize: "0.875rem" }}>
-                SQL · Database · Backend
+                SQL · Tables · Storage
               </span>
               <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                 <span className="muted" style={{ fontSize: "0.875rem" }}>
