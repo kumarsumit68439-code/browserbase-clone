@@ -4,17 +4,32 @@ import { createClient } from "@/lib/supabase/client";
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
+type AuthTab = "email" | "phone" | "google";
+
 function LoginForm() {
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<AuthTab>("email");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [formError, setFormError] = useState("");
   const [info, setInfo] = useState("");
   const searchParams = useSearchParams();
   const router = useRouter();
   const error = searchParams.get("error");
   const next = searchParams.get("next") || "/dashboard";
+
+  const normalizePhone = (raw: string) => {
+    const digits = raw.replace(/[^\d+]/g, "");
+    if (digits.startsWith("+")) return digits;
+    // Default India country code if 10-digit local number
+    if (/^\d{10}$/.test(digits)) return `+91${digits}`;
+    if (/^91\d{10}$/.test(digits)) return `+${digits}`;
+    return digits.startsWith("+") ? digits : `+${digits}`;
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -58,8 +73,6 @@ function LoginForm() {
           },
         });
         if (error) throw error;
-
-        // If session exists (email confirm disabled), go to app
         if (data.session) {
           router.push(next);
           router.refresh();
@@ -76,11 +89,67 @@ function LoginForm() {
         password,
       });
       if (error) throw error;
-
       router.push(next);
       router.refresh();
     } catch (err: any) {
       setFormError(err?.message || "Authentication failed");
+      setLoading(false);
+    }
+  };
+
+  const sendPhoneOtp = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setFormError("");
+    setInfo("");
+    const phoneE164 = normalizePhone(phone);
+    if (!/^\+\d{10,15}$/.test(phoneE164)) {
+      setFormError("Enter a valid phone with country code (e.g. +919876543210)");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createClient();
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: phoneE164,
+      });
+      if (error) throw error;
+      setPhone(phoneE164);
+      setOtpSent(true);
+      setInfo(`OTP sent to ${phoneE164}`);
+    } catch (err: any) {
+      setFormError(
+        err?.message ||
+          "Phone OTP failed. Enable Phone provider + SMS (Twilio) in Supabase Auth settings."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+    setInfo("");
+    const phoneE164 = normalizePhone(phone);
+    if (!otp.trim() || otp.trim().length < 4) {
+      setFormError("Enter the OTP code");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createClient();
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        phone: phoneE164,
+        token: otp.trim(),
+        type: "sms",
+      });
+      if (error) throw error;
+      router.push(next);
+      router.refresh();
+    } catch (err: any) {
+      setFormError(err?.message || "Invalid OTP");
       setLoading(false);
     }
   };
@@ -99,16 +168,35 @@ function LoginForm() {
         <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700 }}>BrowserBase</h1>
           <p className="muted" style={{ fontSize: "0.85rem", marginTop: 4 }}>
-            Email · Password · Google
+            Email · Phone · Google
           </p>
         </div>
         <div className="card">
-          <h2 style={{ textAlign: "center", fontSize: "1.1rem", marginBottom: "0.35rem" }}>
-            {mode === "signin" ? "Sign in" : "Create account"}
-          </h2>
-          <p className="muted" style={{ textAlign: "center", fontSize: "0.8rem", marginBottom: "1.25rem" }}>
-            {mode === "signin" ? "Use email & password or Google" : "Register with email & password"}
-          </p>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            {(
+              [
+                { id: "email" as const, label: "Email" },
+                { id: "phone" as const, label: "Phone" },
+                { id: "google" as const, label: "Google" },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={tab === t.id ? "btn btn-primary" : "btn btn-white"}
+                style={{ flex: 1, fontSize: "0.8rem", padding: "0.5rem" }}
+                onClick={() => {
+                  setTab(t.id);
+                  setFormError("");
+                  setInfo("");
+                  setOtpSent(false);
+                  setOtp("");
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
           {(error || formError) && (
             <p style={{ color: "#f87171", textAlign: "center", fontSize: "0.85rem", marginBottom: "1rem" }}>
@@ -121,93 +209,166 @@ function LoginForm() {
             </p>
           )}
 
-          <form onSubmit={handleEmailAuth}>
-            <label className="muted" style={{ fontSize: "0.75rem" }}>
-              Email
-            </label>
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              style={field}
-              required
-            />
-            <label className="muted" style={{ fontSize: "0.75rem" }}>
-              Password
-            </label>
-            <input
-              type="password"
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min 6 characters"
-              style={field}
-              required
-              minLength={6}
-            />
-            <button className="btn btn-primary" style={{ width: "100%", marginBottom: 12 }} disabled={loading}>
-              {loading
-                ? "Please wait…"
-                : mode === "signin"
-                  ? "Sign in with Email"
-                  : "Sign up with Email"}
-            </button>
-          </form>
-
-          <p style={{ textAlign: "center", fontSize: "0.8rem", marginBottom: 16 }}>
-            {mode === "signin" ? (
-              <>
-                No account?{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("signup");
-                    setFormError("");
-                    setInfo("");
-                  }}
-                  style={{ color: "#a78bfa", background: "none", border: "none", cursor: "pointer" }}
-                >
-                  Sign up
+          {tab === "email" && (
+            <>
+              <h2 style={{ textAlign: "center", fontSize: "1rem", marginBottom: "0.75rem" }}>
+                {mode === "signin" ? "Sign in with Email" : "Sign up with Email"}
+              </h2>
+              <form onSubmit={handleEmailAuth}>
+                <label className="muted" style={{ fontSize: "0.75rem" }}>
+                  Email
+                </label>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  style={field}
+                  required
+                />
+                <label className="muted" style={{ fontSize: "0.75rem" }}>
+                  Password
+                </label>
+                <input
+                  type="password"
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  style={field}
+                  required
+                  minLength={6}
+                />
+                <button className="btn btn-primary" style={{ width: "100%", marginBottom: 12 }} disabled={loading}>
+                  {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
                 </button>
-              </>
-            ) : (
-              <>
-                Already have an account?{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("signin");
-                    setFormError("");
-                    setInfo("");
-                  }}
-                  style={{ color: "#a78bfa", background: "none", border: "none", cursor: "pointer" }}
-                >
-                  Sign in
-                </button>
-              </>
-            )}
-          </p>
+              </form>
+              <p style={{ textAlign: "center", fontSize: "0.8rem" }}>
+                {mode === "signin" ? (
+                  <>
+                    No account?{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("signup");
+                        setFormError("");
+                      }}
+                      style={{ color: "#a78bfa", background: "none", border: "none", cursor: "pointer" }}
+                    >
+                      Sign up
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Have an account?{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("signin");
+                        setFormError("");
+                      }}
+                      style={{ color: "#a78bfa", background: "none", border: "none", cursor: "pointer" }}
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
+              </p>
+            </>
+          )}
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <div style={{ flex: 1, height: 1, background: "#27272a" }} />
-            <span className="muted" style={{ fontSize: "0.75rem" }}>
-              OR
-            </span>
-            <div style={{ flex: 1, height: 1, background: "#27272a" }} />
-          </div>
+          {tab === "phone" && (
+            <>
+              <h2 style={{ textAlign: "center", fontSize: "1rem", marginBottom: "0.75rem" }}>
+                Sign in with Phone
+              </h2>
+              {!otpSent ? (
+                <form onSubmit={sendPhoneOtp}>
+                  <label className="muted" style={{ fontSize: "0.75rem" }}>
+                    Phone number
+                  </label>
+                  <input
+                    type="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 9876543210"
+                    style={field}
+                    required
+                  />
+                  <p className="muted" style={{ fontSize: "0.7rem", marginBottom: 12 }}>
+                    Country code required. 10-digit India numbers auto-use +91.
+                  </p>
+                  <button className="btn btn-primary" style={{ width: "100%" }} disabled={loading}>
+                    {loading ? "Sending…" : "Send OTP"}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={verifyPhoneOtp}>
+                  <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 8 }}>
+                    Code sent to <strong style={{ color: "#fff" }}>{phone}</strong>
+                  </p>
+                  <label className="muted" style={{ fontSize: "0.75rem" }}>
+                    OTP code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    placeholder="6-digit code"
+                    style={field}
+                    required
+                  />
+                  <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10 }} disabled={loading}>
+                    {loading ? "Verifying…" : "Verify & Sign in"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-white"
+                    style={{ width: "100%" }}
+                    disabled={loading}
+                    onClick={() => sendPhoneOtp()}
+                  >
+                    Resend OTP
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      marginTop: 10,
+                      background: "none",
+                      border: "none",
+                      color: "#a1a1aa",
+                      fontSize: "0.8rem",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtp("");
+                      setInfo("");
+                    }}
+                  >
+                    Change number
+                  </button>
+                </form>
+              )}
+            </>
+          )}
 
-          <button className="btn btn-white" style={{ width: "100%" }} onClick={handleGoogleLogin} disabled={loading}>
-            {loading ? "Redirecting..." : "Continue with Google"}
-          </button>
+          {tab === "google" && (
+            <>
+              <h2 style={{ textAlign: "center", fontSize: "1rem", marginBottom: "1rem" }}>
+                Continue with Google
+              </h2>
+              <button className="btn btn-white" style={{ width: "100%" }} onClick={handleGoogleLogin} disabled={loading}>
+                {loading ? "Redirecting..." : "Sign in with Google"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
